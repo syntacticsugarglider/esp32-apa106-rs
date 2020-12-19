@@ -1,5 +1,3 @@
-#![feature(const_fn_floating_point_arithmetic)]
-
 use std::{
     convert::TryFrom,
     fmt::Debug,

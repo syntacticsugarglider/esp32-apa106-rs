@@ -319,7 +319,7 @@ impl Apa106 {
                 channel,
                 self.buffer.as_ptr() as *const u8,
                 (self.buffer.len() * size_of::<Color>()) as u32,
-                false,
+                true,
             )
         })?;
         Ok(())

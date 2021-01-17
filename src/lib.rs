@@ -8,11 +8,11 @@ use std::{
 use thiserror::Error;
 
 use esp_idf_sys::{
-    c_types::c_void, esp, esp_err_t, gpio_num_t, rmt_carrier_level_t_RMT_CARRIER_LEVEL_LOW,
-    rmt_channel_id_t, rmt_config, rmt_config_t, rmt_config_t__bindgen_ty_1, rmt_driver_install,
-    rmt_driver_uninstall, rmt_idle_level_t_RMT_IDLE_LEVEL_LOW, rmt_item32_s__bindgen_ty_1,
-    rmt_item32_t, rmt_mode_t_RMT_MODE_TX, rmt_translator_init, rmt_tx_config_t, rmt_wait_tx_done,
-    rmt_write_sample, size_t, Error,
+    c_types::c_void, esp, gpio_num_t, rmt_carrier_level_t_RMT_CARRIER_LEVEL_LOW, rmt_channel_id_t,
+    rmt_config, rmt_config_t, rmt_config_t__bindgen_ty_1, rmt_driver_install, rmt_driver_uninstall,
+    rmt_idle_level_t_RMT_IDLE_LEVEL_LOW, rmt_item32_s__bindgen_ty_1, rmt_item32_t,
+    rmt_mode_t_RMT_MODE_TX, rmt_translator_init, rmt_tx_config_t, rmt_wait_tx_done,
+    rmt_write_sample, size_t, EspError,
 };
 
 pub enum RmtChannel {
@@ -278,7 +278,7 @@ impl Color {
 }
 
 impl Apa106 {
-    pub fn new(channel: RmtChannel, pin: OutputPin, length: usize) -> Result<Self, Error> {
+    pub fn new(channel: RmtChannel, pin: OutputPin, length: usize) -> Result<Self, EspError> {
         let buffer = vec![
             Color {
                 green: 0,
@@ -311,7 +311,7 @@ impl Apa106 {
         esp!(unsafe { rmt_translator_init(config.channel, Some(rmt_adapter)) })?;
         Ok(Apa106 { channel, buffer })
     }
-    pub fn flush(&self) -> Result<(), Error> {
+    pub fn flush(&self) -> Result<(), EspError> {
         let channel = self.channel.to_rmt_channel_id_t();
         esp!(unsafe { rmt_wait_tx_done(channel, 0) })?;
         esp!(unsafe {

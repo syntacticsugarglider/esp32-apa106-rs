@@ -292,7 +292,7 @@ impl Apa106 {
             channel: channel.to_rmt_channel_id_t(),
             gpio_num: pin.to_gpio_num_t(),
             clk_div: 8,
-            mem_block_num: 1,
+            mem_block_num: 2,
             rmt_mode: rmt_mode_t_RMT_MODE_TX,
             __bindgen_anon_1: rmt_config_t__bindgen_ty_1 {
                 tx_config: rmt_tx_config_t {

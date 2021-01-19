@@ -10,7 +10,7 @@ use thiserror::Error;
 use esp_idf_sys::{
     c_types::c_void, esp, gpio_num_t, rmt_carrier_level_t_RMT_CARRIER_LEVEL_LOW, rmt_channel_id_t,
     rmt_config, rmt_config_t, rmt_config_t__bindgen_ty_1, rmt_driver_install, rmt_driver_uninstall,
-    rmt_idle_level_t_RMT_IDLE_LEVEL_LOW, rmt_item32_s__bindgen_ty_1, rmt_item32_t,
+    rmt_idle_level_t_RMT_IDLE_LEVEL_LOW, rmt_item32_s, rmt_item32_s__bindgen_ty_1, rmt_item32_t,
     rmt_mode_t_RMT_MODE_TX, rmt_translator_init, rmt_tx_config_t, rmt_wait_tx_done,
     rmt_write_sample, size_t, EspError,
 };
@@ -219,8 +219,60 @@ fn bits(byte: &u8) -> impl Iterator<Item = bool> {
     (0..8u8).map(move |bit| byte & (1 << (7 - bit)) != 0)
 }
 
-const APA106_LOW_BIT: u32 = 0x0d8004;
-const APA106_HIGH_BIT: u32 = 0x04800d;
+const fn set_bit(data: u32, index: usize, val: bool) -> u32 {
+    let byte_index = index / 8;
+    let mut storage = data.to_ne_bytes();
+    let bit_index = if cfg!(target_endian = "big") {
+        7 - (index % 8)
+    } else {
+        index % 8
+    };
+    let mask = 1 << bit_index;
+    if val {
+        storage[byte_index] |= mask;
+    } else {
+        storage[byte_index] &= !mask;
+    }
+    u32::from_ne_bytes(storage)
+}
+
+const fn set_bits(mut data: u32, bit_offset: usize, bit_width: u8, val: u64) -> u32 {
+    let mut i = 0;
+    loop {
+        if i >= (bit_width as usize) {
+            break;
+        }
+        let mask = 1 << i;
+        let val_bit_is_set = val & mask == mask;
+        let index = if cfg!(target_endian = "big") {
+            bit_width as usize - 1 - i
+        } else {
+            i
+        };
+        data = set_bit(data, index + bit_offset, val_bit_is_set);
+        i += 1;
+    }
+    data
+}
+
+const fn rmt_item(duration_0: u32, level_0: bool, duration_1: u32, level_1: bool) -> rmt_item32_s {
+    let item = 0u32;
+    let item = set_bits(item, 0, 15, duration_0 as u64);
+    let item = set_bit(item, 15, level_0);
+    let item = set_bits(item, 16, 15, duration_1 as u64);
+    let item = set_bit(item, 31, level_1);
+    rmt_item32_s {
+        __bindgen_anon_1: rmt_item32_s__bindgen_ty_1 { val: item },
+    }
+}
+
+// timings are in 100ns units due to clock division
+// rmt items are two levels with durations packed into a u32
+// in this case it's 1.3 microseconds for the high side
+// of the on-bit and 400ns for the low-side, with the
+// reverse for the off-bit
+const APA106_LOW_BIT: rmt_item32_s = rmt_item(13, true, 4, false);
+const APA106_HIGH_BIT: rmt_item32_s = rmt_item(4, true, 13, false);
 
 #[inline(never)]
 #[link_section = ".iram1"]
@@ -244,11 +296,7 @@ extern "C" fn rmt_adapter(
         &unsafe { slice::from_raw_parts(src as *const u8, src_size as usize) }[..num as usize];
     let dest = unsafe { slice::from_raw_parts_mut(dest, (num * 8) as usize) };
     for (bit, item) in src.iter().map(bits).flatten().zip(dest) {
-        *item = rmt_item32_t {
-            __bindgen_anon_1: rmt_item32_s__bindgen_ty_1 {
-                val: if bit { APA106_HIGH_BIT } else { APA106_LOW_BIT },
-            },
-        };
+        *item = if bit { APA106_HIGH_BIT } else { APA106_LOW_BIT };
     }
     unsafe { *translated_size = num };
     unsafe {
@@ -292,7 +340,7 @@ impl Apa106 {
             channel: channel.to_rmt_channel_id_t(),
             gpio_num: pin.to_gpio_num_t(),
             clk_div: 8,
-            mem_block_num: 2,
+            mem_block_num: 1,
             rmt_mode: rmt_mode_t_RMT_MODE_TX,
             __bindgen_anon_1: rmt_config_t__bindgen_ty_1 {
                 tx_config: rmt_tx_config_t {
